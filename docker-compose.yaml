@@ -1,77 +1,80 @@
-version: "3"
-
 services:
   nginx-proxy:
     container_name: nginx-proxy
-    image: 'jwilder/nginx-proxy:alpine'
-    restart: always
+    image: nginxproxy/nginx-proxy:alpine
+    restart: unless-stopped
     ports:
-      - '80:80'
-      - '443:443'
+      - "80:80"
+      - "443:443"
     environment:
-      - DEFAULT_HOST=${HOST}
-      - HSTS=off
+      DEFAULT_HOST: ${HOST}
+      HSTS: "off"
     volumes:
       - /var/run/docker.sock:/tmp/docker.sock:ro
       - proxy-certs:/etc/nginx/certs:ro
       - proxy-vhost:/etc/nginx/vhost.d
       - proxy-html:/usr/share/nginx/html
-  
+
   proxy-letsencrypt:
-    image: 'jrcs/letsencrypt-nginx-proxy-companion'
-    restart: always
+    container_name: proxy-letsencrypt
+    image: nginxproxy/acme-companion:2.4
+    restart: unless-stopped
+    depends_on:
+      - nginx-proxy
     environment:
-      - DEFAULT_EMAIL=${LETSENCRYPT_EMAIL}
-      - NGINX_PROXY_CONTAINER=nginx-proxy
-      - NGINX_DOCKER_GEN_CONTAINER=nginx-proxy
+      DEFAULT_EMAIL: ${LETSENCRYPT_EMAIL}
+      NGINX_PROXY_CONTAINER: nginx-proxy
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - proxy-certs:/etc/nginx/certs
       - proxy-vhost:/etc/nginx/vhost.d
       - proxy-html:/usr/share/nginx/html
       - acme:/etc/acme.sh
-  
+
   send:
-    image: '${DOCKER_SEND_IMAGE}'
-    restart: always
-    ports:
-      - '1234:1234'
-    volumes:
-      - ./uploads:/uploads
+    image: ${DOCKER_SEND_IMAGE}
+    restart: unless-stopped
+    expose:
+      - "1443"
+    env_file:
+      - .env
     environment:
-      - VIRTUAL_HOST=${HOST}
-      - VIRTUAL_PORT=1234
-      - DHPARAM_GENERATION=false
-      - LETSENCRYPT_HOST
-      - LETSENCRYPT_EMAIL
-      - NODE_ENV=production
-      - BASE_URL=${SEND_BASE_URL}
-      - PORT=1234
-      - REDIS_HOST=redis
+      VIRTUAL_HOST: ${HOST}
+      VIRTUAL_PORT: "1443"
+      LETSENCRYPT_HOST: ${LETSENCRYPT_HOST}
+      LETSENCRYPT_EMAIL: ${LETSENCRYPT_EMAIL}
+      DHPARAM_GENERATION: "false"
+      NODE_ENV: production
+      PORT: "1443"
+      REDIS_HOST: redis
+      FILE_DIR: /uploads
+    depends_on:
+      redis:
+        condition: service_healthy
+    volumes:
+      - /var/lib/send/uploads:/uploads
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          node -e "require('http').get({host:'127.0.0.1',port:1443,path:'/__heartbeat__'}, response => process.exit(response.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))"
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
 
-      # For local uploads storage
-      - FILE_DIR=/uploads
-
-      # For S3 object storage (disable volume and FILE_DIR variable)
-      # - AWS_ACCESS_KEY_ID=********
-      # - AWS_SECRET_ACCESS_KEY=********
-      # - S3_BUCKET=send
-      # - S3_ENDPOINT=s3.us-west-2.amazonaws.com
-      # - S3_USE_PATH_STYLE_ENDPOINT=true
-
-      # To customize upload limits
-      # - EXPIRE_TIMES_SECONDS=3600,86400,604800,2592000,31536000
-      # - DEFAULT_EXPIRE_SECONDS=3600
-      # - MAX_EXPIRE_SECONDS=31536000
-      # - DOWNLOAD_COUNTS=1,2,5,10,15,25,50,100,1000
-      # - MAX_DOWNLOADS=1000
-      # - MAX_FILE_SIZE=2684354560
-  
   redis:
-    image: 'redis:alpine'
-    restart: always
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
     volumes:
       - send-redis:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
 
 volumes:
   send-redis:
