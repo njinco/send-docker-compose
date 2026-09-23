@@ -1,7 +1,7 @@
 # Send in Docker compose
 
 This repository provides a basic Docker compose configuration to host a public
-[Send](https://gitlab.com/timvisee/send) instance on your own domain.
+[Send](https://github.com/njinco/send) instance on your own domain.
 
 - Hosts on your own domain
 - Provides automatic SSL certificates through LetsEncrypt
@@ -9,19 +9,22 @@ This repository provides a basic Docker compose configuration to host a public
 This configuration exposes a reverse proxy on ports 80 and 443, so these must be
 available.
 
-This uses the latest Send version from
-[`timvisee/send`](https://gitlab.com/timvisee/send) because
-[`mozilla/send`](https://github.com/mozilla/send) has been archived.
-This is configurable in your [`.env`](.env.example) file.
+This uses the image published from the [`njinco/send`](https://github.com/njinco/send)
+fork to GitHub Container Registry (`ghcr.io/njinco/send`). Successful pushes to
+`master` publish `master`; `v*` tags publish the version and update `latest`
+after GitHub Actions checks pass. After the first image is published,
+make the GHCR package public so your deployment host can pull it without
+authentication. Set `DOCKER_SEND_IMAGE` in your [`.env`](.env.example) to a
+version tag or digest for production deployments.
 
 See [docker-compose.yaml](./docker-compose.yaml).
 
-*Note: for plain Docker usage without Compose, see: https://github.com/timvisee/send/blob/master/docs/docker.md*
+*Note: for plain Docker usage without Compose, see: https://github.com/njinco/send/blob/master/docs/docker.md*
 
 ## Usage
 
 1. Install Docker Engine with the Compose plugin: https://docs.docker.com/engine/install/
-2. Clone this repository: `git clone https://github.com/timvisee/send-docker-compose && cd send-docker-compose`
+2. Clone this repository: `git clone https://github.com/njinco/send-docker-compose && cd send-docker-compose`
 3. Copy `.env.example` to `.env` and replace the host, email, image, and storage settings.
 4. Create the host upload directory and ensure the Docker daemon can write it: `sudo install -d -m 750 /var/lib/send/uploads`
 5. Validate the rendered configuration without starting containers. Because the
@@ -50,9 +53,9 @@ container by Compose; Compose-only values are kept in the file comments.
 
 ## Configuration
 
-All the config options and their defaults can be found here: https://github.com/timvisee/send/blob/master/server/config.js
+All the config options and their defaults can be found here: https://github.com/njinco/send/blob/master/server/config.js
 
-For more documentation about the config options available and their defaults, see: https://github.com/timvisee/send/blob/master/docs/docker.md
+For more documentation about the config options available and their defaults, see: https://github.com/njinco/send/blob/master/docs/docker.md
 
 The sample supports local filesystem storage, AWS/S3-compatible storage, and
 Google Cloud Storage. Set exactly one backend: leave both bucket variables
